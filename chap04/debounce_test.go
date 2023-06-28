@@ -8,6 +8,7 @@ import (
 )
 
 func TestDebounceFirstDataRace(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	circuit := failAfter(1)
@@ -46,6 +47,7 @@ func TestDebounceFirstDataRace(t *testing.T) {
 }
 
 func TestDebounceLastDataRace(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	debounce := DebounceLast(counter(), time.Second)
 	wg := sync.WaitGroup{}

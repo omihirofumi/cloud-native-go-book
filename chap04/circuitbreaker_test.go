@@ -50,6 +50,7 @@ func waitAndContinue() Circuit {
 }
 
 func TestCircuitBreakerAfter5(t *testing.T) {
+	t.Parallel()
 	circuit := failAfter(5)
 	ctx := context.Background()
 
@@ -68,6 +69,7 @@ func TestCircuitBreakerAfter5(t *testing.T) {
 }
 
 func TestCircuitBreaker(t *testing.T) {
+	t.Parallel()
 	circuit := failAfter(5)
 
 	breaker := Breaker(circuit, 1)
@@ -116,6 +118,7 @@ func TestCircuitBreaker(t *testing.T) {
 }
 
 func TestCircuitBreakerFailAfter5(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 
 	circuit := waitAndContinue()
