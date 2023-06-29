@@ -7,6 +7,7 @@ import (
 )
 
 func TestFunnel(t *testing.T) {
+	t.Parallel()
 	sources := make([]<-chan int, 0)
 
 	for i := 0; i < 3; i++ {

@@ -7,6 +7,7 @@ import (
 )
 
 func TestSplit(t *testing.T) {
+	t.Parallel()
 	source := make(chan int)
 	dests := Split(source, 5)
 
