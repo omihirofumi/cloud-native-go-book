@@ -3,79 +3,103 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
+	"sync"
 )
 
 type EventType byte
 
 const (
-	_                     = iota
-	EventDelete EventType = iota
-	EventPut
+	_                     = iota // iota == 0; ignore this value
+	EventDelete EventType = iota // iota == 1
+	EventPut                     // iota == 2; implicitly repeat last
 )
 
 type Event struct {
 	Sequence  uint64
 	EventType EventType
 	Key       string
-	value     string
+	Value     string
 }
 
-type TransactionLogger interface {
-	WriteDelete(key string)
-	WritePut(key, value string)
-}
-
-type FileTransactionLogger struct {
-	events       chan<- Event
+type TransactionLogger struct {
+	events       chan<- Event // Write-only channel for sending events
 	errors       <-chan error
-	lastSequence uint64
-	file         *os.File
+	lastSequence uint64   // The last used event sequence number
+	file         *os.File // The location of the transaction log
+	wg           *sync.WaitGroup
 }
 
-func (l *FileTransactionLogger) WritePut(key, value string) {
-	l.events <- Event{EventType: EventPut, Key: key, value: value}
+func (l *TransactionLogger) WritePut(key, value string) {
+	l.wg.Add(1)
+	l.events <- Event{EventType: EventPut, Key: key, Value: url.QueryEscape(value)}
 }
 
-func (l *FileTransactionLogger) WriteDelete(key string) {
+func (l *TransactionLogger) WriteDelete(key string) {
+	l.wg.Add(1)
 	l.events <- Event{EventType: EventDelete, Key: key}
 }
 
-func (l *FileTransactionLogger) Err() <-chan error {
+func (l *TransactionLogger) Err() <-chan error {
 	return l.errors
 }
 
-func NewFileTransactionLogger(filename string) (TransactionLogger, error) {
-	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
+func NewTransactionLogger(filename string) (*TransactionLogger, error) {
+	var err error
+	var l TransactionLogger = TransactionLogger{wg: &sync.WaitGroup{}}
+
+	// Open the transaction log file for reading and writing.
+	l.file, err = os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open transaction log file: %w", err)
 	}
-	return &FileTransactionLogger{file: file}, nil
+
+	return &l, nil
 }
 
-func (l *FileTransactionLogger) Run() {
+func (l *TransactionLogger) Run() {
 	events := make(chan Event, 16)
 	l.events = events
 
 	errors := make(chan error, 1)
 	l.errors = errors
 
+	// Start retrieving events from the events channel and writing them
+	// to the transaction log
 	go func() {
 		for e := range events {
 			l.lastSequence++
+
 			_, err := fmt.Fprintf(
 				l.file,
 				"%d\t%d\t%s\t%s\n",
-				l.lastSequence, e.EventType, e.Key, e.value)
+				l.lastSequence, e.EventType, e.Key, e.Value)
+
 			if err != nil {
-				errors <- err
-				return
+				errors <- fmt.Errorf("cannot write to log file: %w", err)
 			}
+
+			l.wg.Done()
 		}
 	}()
 }
 
-func (l *FileTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
+func (l *TransactionLogger) Wait() {
+	l.wg.Wait()
+}
+
+func (l *TransactionLogger) Close() error {
+	l.wg.Wait()
+
+	if l.events != nil {
+		close(l.events) // Terminates Run loop and goroutine
+	}
+
+	return l.file.Close()
+}
+
+func (l *TransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
 	scanner := bufio.NewScanner(l.file)
 	outEvent := make(chan Event)
 	outError := make(chan error, 1)
@@ -89,21 +113,31 @@ func (l *FileTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
 		for scanner.Scan() {
 			line := scanner.Text()
 
-			if _, err := fmt.Sscanf(line, "%d\t%d\t%s\t%s",
-				&e.Sequence, &e.EventType, &e.Key, &e.value); err != nil {
-				outError <- fmt.Errorf("input parse error: %w", err)
-				return
-			}
+			fmt.Sscanf(
+				line, "%d\t%d\t%s\t%s",
+				&e.Sequence, &e.EventType, &e.Key, &e.Value)
 
 			if l.lastSequence >= e.Sequence {
 				outError <- fmt.Errorf("transaction numbers out of sequence")
 				return
 			}
 
+			uv, err := url.QueryUnescape(e.Value)
+			if err != nil {
+				outError <- fmt.Errorf("vaalue decoding failure: %w", err)
+				return
+			}
+
+			e.Value = uv
 			l.lastSequence = e.Sequence
 
 			outEvent <- e
 		}
+
+		if err := scanner.Err(); err != nil {
+			outError <- fmt.Errorf("transaction log read failure: %w", err)
+		}
 	}()
+
 	return outEvent, outError
 }
