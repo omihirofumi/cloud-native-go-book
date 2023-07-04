@@ -14,11 +14,10 @@ func fileExists(filename string) bool {
 }
 
 func TestCreateLogger(t *testing.T) {
-	t.Parallel()
 	const filename = "/tmp/create-logger.txt"
 	defer os.Remove(filename)
 
-	tl, err := NewTransactionLogger(filename)
+	tl, err := NewFileTransactionLogger(filename)
 
 	if tl == nil {
 		t.Error("Logger is nil?")
@@ -34,11 +33,10 @@ func TestCreateLogger(t *testing.T) {
 }
 
 func TestWriteAppend(t *testing.T) {
-	t.Parallel()
 	const filename = "/tmp/write-append.txt"
 	defer os.Remove(filename)
 
-	tl, err := NewTransactionLogger(filename)
+	tl, err := NewFileTransactionLogger(filename)
 	if err != nil {
 		t.Error(err)
 	}
@@ -58,7 +56,7 @@ func TestWriteAppend(t *testing.T) {
 	tl.WritePut("my-key", "my-value2")
 	tl.Wait()
 
-	tl2, err := NewTransactionLogger(filename)
+	tl2, err := NewFileTransactionLogger(filename)
 	if err != nil {
 		t.Error(err)
 	}
@@ -84,11 +82,10 @@ func TestWriteAppend(t *testing.T) {
 }
 
 func TestWritePut(t *testing.T) {
-	t.Parallel()
 	const filename = "/tmp/write-put.txt"
 	defer os.Remove(filename)
 
-	tl, _ := NewTransactionLogger(filename)
+	tl, _ := NewFileTransactionLogger(filename)
 	tl.Run()
 	defer tl.Close()
 
@@ -98,7 +95,7 @@ func TestWritePut(t *testing.T) {
 	tl.WritePut("my-key", "my-value4")
 	tl.Wait()
 
-	tl2, _ := NewTransactionLogger(filename)
+	tl2, _ := NewFileTransactionLogger(filename)
 	evin, errin := tl2.ReadEvents()
 	defer tl2.Close()
 

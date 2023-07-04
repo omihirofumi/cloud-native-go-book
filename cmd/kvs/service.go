@@ -9,7 +9,7 @@ import (
 	"net/http"
 )
 
-var logger *TransactionLogger
+var logger TransactionLogger
 
 func KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -68,7 +68,16 @@ func KeyValueDeleteHandler(w http.ResponseWriter, r *http.Request) {
 func initializeTransactionLog() error {
 	var err error
 
-	logger, err = NewTransactionLogger("/tmp/transaction.log")
+	config := PostgresDBParams{
+		host:     "localhost",
+		port:     5433,
+		dbName:   "postgres",
+		user:     "postgres",
+		password: "mypass",
+		sslmode:  "disable",
+	}
+	logger, err = NewPostgresTransactionLogger(config)
+	//logger, err = NewFileTransactionLogger("/tmp/transaction.log")
 	if err != nil {
 		return fmt.Errorf("failed to create event logger: %w", err)
 	}
@@ -96,6 +105,15 @@ func initializeTransactionLog() error {
 func main() {
 
 	err := initializeTransactionLog()
+	go func() {
+		for {
+			select {
+			case err = <-logger.Err():
+				log.Printf("error occured: %w", err)
+			}
+		}
+	}()
+	defer logger.Close()
 	if err != nil {
 		panic(err)
 	}
