@@ -68,16 +68,16 @@ func KeyValueDeleteHandler(w http.ResponseWriter, r *http.Request) {
 func initializeTransactionLog() error {
 	var err error
 
-	config := PostgresDBParams{
-		host:     "localhost",
-		port:     5433,
-		dbName:   "postgres",
-		user:     "postgres",
-		password: "mypass",
-		sslmode:  "disable",
-	}
-	logger, err = NewPostgresTransactionLogger(config)
-	//logger, err = NewFileTransactionLogger("/tmp/transaction.log")
+	//config := PostgresDBParams{
+	//	host:     "localhost",
+	//	port:     5433,
+	//	dbName:   "postgres",
+	//	user:     "postgres",
+	//	password: "mypass",
+	//	sslmode:  "disable",
+	//}
+	//logger, err = NewPostgresTransactionLogger(config)
+	logger, err = NewFileTransactionLogger("transaction.log")
 	if err != nil {
 		return fmt.Errorf("failed to create event logger: %w", err)
 	}
@@ -124,5 +124,5 @@ func main() {
 	r.HandleFunc("/v1/{key}", KeyValueGetHandler).Methods("GET")
 	r.HandleFunc("/v1/{key}", KeyValueDeleteHandler).Methods("DELETE")
 
-	log.Fatal(http.ListenAndServe(":8000", r))
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
