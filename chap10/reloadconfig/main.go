@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"gopkg.in/yaml.v3"
 	"io"
 	"log"
@@ -92,8 +93,33 @@ func watchConfig(filepath string) (<-chan string, <-chan error, error) {
 	return changes, errs, nil
 }
 
+func watchConfigNotify(filepath string) (<-chan string, <-chan error, error) {
+	changes := make(chan string)
+
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = watcher.Add(filepath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	go func() {
+		changes <- filepath
+
+		for event := range watcher.Events {
+			if event.Op&fsnotify.Write == fsnotify.Write {
+				changes <- event.Name
+			}
+		}
+	}()
+	return changes, watcher.Errors, nil
+}
+
 func init() {
-	updates, errors, err := watchConfig("config.yaml")
+	updates, errors, err := watchConfigNotify("config.yaml")
 	if err != nil {
 		panic(err)
 	}
